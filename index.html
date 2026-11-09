@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>缺貨通知</title>
+<style>
+  :root { --bg:#f6f6f3; --card:#fff; --text:#222; --muted:#777; --accent:#d9480f; --ok:#2b8a3e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161616; --card:#242424; --text:#eee; --muted:#999; --accent:#ff8c5a; --ok:#69db7c; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--text);
+         font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p.hint { color:var(--muted); margin:0 0 16px; font-size:14px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
+  button.item { background:var(--card); color:var(--text); border:2px solid transparent; border-radius:14px;
+                padding:18px 10px; font-size:17px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.12); }
+  button.item:active { transform:scale(.97); }
+  button.item.sent { border-color:var(--ok); color:var(--ok); }
+  button.item:disabled { opacity:.7; }
+  #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#222; color:#fff;
+           padding:12px 20px; border-radius:24px; opacity:0; transition:opacity .25s; pointer-events:none; }
+  #toast.show { opacity:1; }
+</style>
+</head>
+<body>
+<h1>📦 缺貨通知</h1>
+<p class="hint">發現哪樣商品沒貨了，點一下就會通知老闆</p>
+<div class="grid" id="grid"></div>
+<div id="toast"></div>
+
+<script>
+// ====== 只需要改這三個地方 ======
+const API_URL = "https://script.google.com/macros/s/AKfycby7eWiC7Dp6D0jQp0S_60-RY3TdGnV7pMrJ1yjLFcQXRikVBsydbnd-GoGAMZnQuRUtQA/exec";
+const SECRET  = "Hwbt2020";
+const PRODUCTS = ["紅茶", "綠茶", "奶茶", "珍珠", "杯子", "吸管"]; // 換成你們的商品
+// ==================================
+
+const COOLDOWN_MIN = 30; // 同一商品 30 分鐘內不重複通知
+const grid = document.getElementById("grid");
+const toast = document.getElementById("toast");
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add("show");
+  setTimeout(() => toast.classList.remove("show"), 2200);
+}
+
+function lastSent(name) {
+  try { return Number(localStorage.getItem("sent:" + name)) || 0; } catch (e) { return 0; }
+}
+function markSent(name) {
+  try { localStorage.setItem("sent:" + name, Date.now()); } catch (e) {}
+}
+function inCooldown(name) {
+  return Date.now() - lastSent(name) < COOLDOWN_MIN * 60000;
+}
+
+function render() {
+  grid.innerHTML = "";
+  PRODUCTS.forEach(name => {
+    const b = document.createElement("button");
+    b.className = "item";
+    b.textContent = name;
+    if (inCooldown(name)) { b.classList.add("sent"); b.textContent = "✓ " + name; }
+    b.onclick = () => notify(name, b);
+    grid.appendChild(b);
+  });
+}
+
+async function notify(name, btn) {
+  if (inCooldown(name)) { showToast("剛剛已經通知過了"); return; }
+  if (!confirm("確定「" + name + "」沒貨了嗎？")) return;
+  btn.disabled = true;
+  try {
+    await fetch(API_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ item: name, secret: SECRET })
+    });
+    markSent(name);
+    showToast("已通知老闆：" + name + " 沒貨");
+  } catch (e) {
+    showToast("送出失敗，請檢查網路再試一次");
+  }
+  btn.disabled = false;
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
